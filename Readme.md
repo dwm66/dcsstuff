@@ -19,7 +19,7 @@
 
 ## Todo list
 
-- AWACSHANDLER Air start
+- DONE: AWACSHANDLER Air start
 - TANKERHANDLER Air start
 - TANKERHANDLER Multiple Tankers (Drogue/Boom) at one Spec
 - AWACSHANDLER Optional Menus for RTB command

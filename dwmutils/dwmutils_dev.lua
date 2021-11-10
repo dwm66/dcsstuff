@@ -214,11 +214,17 @@ function TankerHandler:menuInit( parentMenu )
 	end	
 end
 
-function TankerHandler:findAvailableTanker( theType, theSpec )
+function TankerHandler:findAvailableTanker( theType, theSpec, airstart )
 	env.info ('findAvailableTanker: Searching for type ' .. theType)
 	for k,t in pairs ( self.tankerList ) do
 		if t.tankerType == theType and not t.assigned then
-			return t
+			if airstart then
+				if not t.useUncontrolled then 
+					return t
+				end
+			else
+				return t
+			end
 		end
 	end
 	return nil
@@ -544,10 +550,16 @@ function AWACSHANDLER:menuInit( parentMenu )
 	end	
 end
 
-function AWACSHANDLER:findAvailableAWACS()
+function AWACSHANDLER:findAvailableAWACS( airstart )
 	for k,t in pairs ( self.AWACSList ) do
 		if not t.assigned then
-			return t
+			if airstart then
+				if not t.useUncontrolled then 
+					return t
+				end
+			else
+				return t
+			end
 		end
 	end
 	return nil
@@ -584,7 +596,7 @@ function AWACSHANDLER:getAWACSStates()
 	return status
 end
 
-function AWACSHANDLER:setAWACSSpec( theAWACS )
+function AWACSHANDLER:setAWACSSpec( theAWACS, airstart )
 	if not theAWACS.assigned then
 		env.warning('called AWACSHANDLER:setAWACSSpec without spec assigned to tanker, abort!')
 		return nil
@@ -604,7 +616,7 @@ function AWACSHANDLER:setAWACSSpec( theAWACS )
 	local theLandingAirbase = 	AIRBASE:FindByName(theAWACS.landingAirbase)
 	local activeLandingRW =		theLandingAirbase:GetActiveRunway().idx
 	local airbaseLandingCoord = theLandingAirbase:GetCoord()			
-	env.info( "Landing coordinates: " .. airbaseLandingCoord:ToStringLLDMS())
+	self:E( "AWACS " .. theAWACS.name .. " landing coordinates: " .. airbaseLandingCoord:ToStringLLDMS())
 
 	-- tasking: Tanker
 	local tasks = {}
@@ -620,16 +632,17 @@ function AWACSHANDLER:setAWACSSpec( theAWACS )
 	
 	-- theTanker.tankerGroup:WayPointInitialize(theWaypoints)
 	
-	table.insert(theWaypoints,airbaseStartCoord:WaypointAirTakeOffParking())
-	table.insert(theWaypoints,theSpec.route.base_egress[1].coord:WaypointAirTurningPoint("BARO",theSpec.route.velocity,{AWACStask},'Airbase Exit'))
-	-- TODO: Define way there
+	if not airstart then
+		table.insert(theWaypoints,airbaseStartCoord:WaypointAirTakeOffParking())
+		table.insert(theWaypoints,theSpec.route.base_egress[1].coord:WaypointAirTurningPoint("BARO",theSpec.route.velocity,{AWACStask},'Airbase Exit'))
+		-- TODO: Define way there
 
-	for k,cords in pairs(theSpec.route.waythere) do
-		table.insert(theWaypoints,cords:WaypointAirTurningPoint("BARO",theSpec.route.velocity))
-	end
-	
+		for k,cords in pairs(theSpec.route.waythere) do
+			table.insert(theWaypoints,cords:WaypointAirTurningPoint("BARO",theSpec.route.velocity))
+		end
+	end -- airstart
 	-- Racetrack
-	table.insert(theWaypoints,theSpec.route.racetrack.coord1:WaypointAirTurningPoint("BARO",theSpec.route.racetrack.velocity,{orbittask},"Holding Point"))
+	table.insert(theWaypoints,theSpec.route.racetrack.coord1:WaypointAirTurningPoint("BARO",theSpec.route.racetrack.velocity,{AWACStask,orbittask},"Holding Point"))
 	
 	-- TODO: Define way back
 	for k,cords in pairs(theSpec.route.wayback) do
@@ -640,7 +653,7 @@ function AWACSHANDLER:setAWACSSpec( theAWACS )
 	table.insert(theWaypoints,airbaseLandingCoord:WaypointAirLanding())
 	
 	-- env.info (table_out(theWaypoints[8]))		
-	theAWACS.AWACSGroup:Route(theWaypoints,2)
+	theAWACS.AWACSGroup:Route(theWaypoints,1)
 end
 
 function AWACSHANDLER:startUncontrolled( theAWACS )
@@ -656,7 +669,7 @@ function AWACSHANDLER:startUncontrolled( theAWACS )
 	AWACS:CommandSetFrequency(theSpec.frequency)
 	AWACS:CommandEPLRS(true) -- datalink on
 
-	self:setAWACSSpec( theAWACS )
+	self:setAWACSSpec( theAWACS, false )
 	self:setCallbacks( AWACS )
 	
 	AWACS:StartUncontrolled(1)
@@ -668,7 +681,7 @@ function AWACSHANDLER:startUncontrolled( theAWACS )
 	return AWACS
 end
 
-function AWACSHANDLER:spawnNew( theAWACS )
+function AWACSHANDLER:spawnNew( theAWACS, airstart )
 	if not theAWACS.assigned then
 		env.warning('called AWACSHANDLER:spawnNew without spec assigned to AWACS, abort!')
 		return nil
@@ -679,24 +692,42 @@ function AWACSHANDLER:spawnNew( theAWACS )
 	local theSpec = self.AWACSSpecs [ theAWACS.assigned ]
 
 	local spawnAWACS = SPAWN:New(theAWACS.AWACSTemplate)
-	local theAirbase = AIRBASE:FindByName(theAWACS.takeoffAirbase)
+	if airstart then
+		self:E( theAWACS.name .. ' - airstart initiated')
+		local spawnCoord = theSpec.route.racetrack.coord1
+		local nextCoord  = theSpec.route.racetrack.coord2
+		
+		local BasicHeading = spawnCoord:GetAngleDegrees(spawnCoord:GetDirectionVec3(nextCoord))
+		spawnAWACS:InitHeading(BasicHeading)
+		
+		theAWACS['AWACSGroup'] = spawnAWACS:SpawnFromCoordinate(spawnCoord)
+	else
+		local theAirbase = AIRBASE:FindByName(theAWACS.takeoffAirbase)		
+		self:E( theAWACS.name .. ' - cold start initiated at ' .. theAWACS.takeoffAirbase )
+		theAWACS['AWACSGroup'] = spawnAWACS:SpawnAtAirbase(theAirbase,SPAWN.Takeoff.Cold)
+	end
 	
-	local AWACS = spawnAWACS:SpawnAtAirbase(theAirbase,SPAWN.Takeoff.Cold)
-	theAWACS['AWACSGroup'] = AWACS
+	if theAWACS.AWACSGroup == nil then
+		self:E('AWACSHandler: could not start ' .. theAWACS.name)
+		theAWACS.assigned = nil
+		return nil
+	end
 	
-	AWACS:CommandSetCallsign(theSpec.callsign[1],theSpec.callsign[2])
-	AWACS:CommandSetFrequency(theSpec.frequency)
-	AWACS:CommandEPLRS(true) -- datalink on
+	theAWACS.AWACSGroup:CommandSetCallsign(theSpec.callsign[1],theSpec.callsign[2])
+	theAWACS.AWACSGroup:CommandSetFrequency(theSpec.frequency)
+	theAWACS.AWACSGroup:CommandEPLRS(true) -- datalink on
 
-	self:setAWACSSpec( theAWACS )
-	
-	self:setCallbacks( AWACS )
+	self:setAWACSSpec( theAWACS, airstart )
+	self:setCallbacks( theAWACS.AWACSGroup )
 
-	local msgText = 'Requested AWACS ' .. AWACS:GetTypeName() .. ' starting for zone '.. theSpec.name .. ', crew alerted.\n\n'
+	local msgText = 'Requested AWACS ' .. theAWACS.AWACSGroup:GetTypeName() .. ' starting for zone '.. theSpec.name .. ', crew alerted.\n\n'
+	if airstart then
+		msgText = 'Requested AWACS ' .. theAWACS.AWACSGroup:GetTypeName() .. ' arrived in zone '.. theSpec.name .. '\n\n'
+	end
 	msgText = msgText .. 'Contact ' .. theAWACS.AWACSGroup:GetUnit(1):GetCallsign() .. ' on ' .. theSpec.frequency .. ' MHz\n\n'
 	
 	local msg = MESSAGE:New(msgText,25):ToCoalition(self.coalition)
-	return AWACS
+	return theAWACS.AWACSGroup
 end
 
 function AWACSHANDLER:setCallbacks( theAWACSGroup )
@@ -713,7 +744,7 @@ function AWACSHANDLER:setCallbacks( theAWACSGroup )
 	end
 end
 
-function AWACSHANDLER:startAWACS( AWACSName, AWACSSpec )
+function AWACSHANDLER:startAWACS( AWACSName, AWACSSpec, airstart )
 	theAWACS = self:SearchAWACS(AWACSName)
 	theSpec   = self:SearchSpec(AWACSSpec)
 	
@@ -721,14 +752,18 @@ function AWACSHANDLER:startAWACS( AWACSName, AWACSSpec )
 
 	if theAWACS and theSpec and not theAWACS.assigned then
 		env.info('startAWACS assigning: AWACS ' .. theAWACS.name .. ' requested for ' .. theSpec.name )
-		theAWACS.assigned = theSpec.name
-		
+
+		theAWACS.assigned = theSpec.name		
 		if theAWACS.useUncontrolled then
+			if airstart then
+				theAWACS.assigned = nil
+				return nil
+			end
 			self:startUncontrolled( theAWACS )
 		else
-			self:spawnNew( theAWACS )
+			self:spawnNew( theAWACS, airstart )
 		end
-
+		
 		if theAWACS.NeedEscort then
 			theAWACS.NeedEscort.fighterHandler:assignAsEscort( theAWACS.AWACSGroup, theAWACS.NeedEscort.templateSpec )
 		end

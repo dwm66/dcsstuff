@@ -6,7 +6,7 @@ local RatOn  = false
 local TrainingRangeOn = true
 local AARange = true
 local CarrierOps = true
-local EWRDetection = false
+local EWRDetection = true
 local TankerHandling = true
 local AWACSHandling = true
 local FighterHandling = true
@@ -18,7 +18,7 @@ local MissionParameters = {
 }
 
 local MissionStates = { Cold = 1, Hot = 2 }
-local MissionStateAir = MissionStates.Hot
+local MissionStateAir = MissionStates.Cold
 local MissionStateGround = MissionStates.Cold
 
 -- Mission menus
@@ -265,7 +265,7 @@ if AARange then
 		return self
 	end
 	
-	function INTERCEPTTRAINER:addTargetSpec( Name, Template, StartAt, AttackTarget, RoutePoints )
+	function INTERCEPTTRAINER:addTargetSpec( Name, Template, StartAt, AttackTarget, RoutePoints, EnrouteMinAltitude, EnrouteMaxAltitude )
 		local theSpec = {
 			Name = Name,
 			Template = Template,
@@ -273,8 +273,8 @@ if AARange then
 			AttackTarget = AttackTarget,
 			RoutePoints = RoutePoints,
 			Protected = false,
-			EnrouteMinAltitude = UTILS.FeetToMeters(15000),
-			EnrouteMaxAltitude = UTILS.FeetToMeters(25000),
+			EnrouteMinAltitude = EnrouteMinAltitude,
+			EnrouteMaxAltitude = EnrouteMaxAltitude,
 			IngressDistance = 20000,
 			EgressDistance = 10000,
 		}
@@ -324,7 +324,7 @@ if AARange then
 		if StartAtClass == 'AIRBASE' then
 			TrainingDroneGroup = TargetSpawn:SpawnAtAirbase( theSpec.StartAt, self.AirBaseSpawn )
 		elseif StartAtClass:sub(1, 4) == 'ZONE' then
-			env.info('INTERCEPTTRAINER starting at Zone')
+			self:I('INTERCEPTTRAINER starting at Zone')
 			local BasicHeading = TrainingDroneStart:GetAngleDegrees(TrainingDroneStart:GetDirectionVec3(NextPoint))
 			TargetSpawn:InitHeading(BasicHeading)
 			TrainingDroneGroup = TargetSpawn:SpawnInZone(theSpec.StartAt, true, theSpec.EnrouteMinAltitude, theSpec.EnrouteMaxAltitude )
@@ -332,6 +332,16 @@ if AARange then
 			TrainingDroneStart = TrainingDroneGroup:GetCoordinate()
 			EnrouteAltitude = TrainingDroneStart.y
 			env.info('Altitude is ' .. EnrouteAltitude )
+		elseif StartAtClass == 'COORDINATE' then
+			self:I('INTERCEPTTRAINER starting with a COORDINATE')
+
+			local BasicHeading = TrainingDroneStart:GetAngleDegrees(TrainingDroneStart:GetDirectionVec3(NextPoint))
+			TargetSpawn:InitHeading(BasicHeading)
+			TrainingDroneGroup = TargetSpawn:SpawnFromCoordinate(theSpec.StartAt)
+			
+			TrainingDroneStart = theSpec.StartAt
+			EnrouteAltitude = TrainingDroneStart.y
+			self:I('Altitude is ' .. EnrouteAltitude )
 		end
 		
 		theSpec['DroneGroup']=TrainingDroneGroup
@@ -396,11 +406,13 @@ if AARange then
 	InterceptTrainer = INTERCEPTTRAINER:New(coalition.side.BLUE)
 	InterceptTrainer:addTargetSpec('Tu95 from northwest','TargetdroneTemplate -Tu95-1',ZONE_RADIUS:New('Tu95Area',getNavpoint('MIRAGE',coalition.side.BLUE,0):GetVec2(),100),
 	                               UNIT:FindByName('Medinilla Bomb Target B-1'):GetCoord(),
-								   {})
-								   
+								   {}, UTILS.FeetToMeters(15000),UTILS.FeetToMeters(20000))
+	InterceptTrainer:addTargetSpec('B17 from northwest','TargetdroneTemplate -B17-1',ZONE_RADIUS:New('B17Area',COORDINATE:NewFromLLDD(18.5,143,0):GetVec2(),40000),
+	                               AIRBASE:FindByName('Andersen AFB'):GetCoord(),
+								   {}, UTILS.FeetToMeters(5000),UTILS.FeetToMeters(15000))								   
 	env.info(table_out(InterceptTrainer.TargetSpecs))
 
-	InterceptTrainer:InterceptTraining('Tu95 from northwest')
+	InterceptTrainer:InterceptTraining('B17 from northwest')
 	
 	-- Add single protected group(s).
 	-- fox:AddProtectedGroup(GROUP:FindByName("Target-Drone 1-2"))
@@ -691,7 +703,7 @@ if TankerHandling then
 		self:E('Player ' .. PlayerName .. ' in ' .. PlayerUnit.GetCallsign() .. ' is a ' .. PlayerUnit:GetTypeName())
 	end
 	
-	MarianasTankersBlue:startTanker('Django-2','MIRAGE')
+	-- MarianasTankersBlue:startTanker('Django-2','MIRAGE')
 	
 	if MissionStateAir == MissionStates.Hot then
 		MarianasTankersBlue:assignEscort('Django-2', MarianasFightersBlue, {
@@ -735,17 +747,20 @@ if AWACSHandling then
 
 	MarianasAWACSBlue = AWACSHANDLER:New()
 
-	MarianasAWACSBlue:addAWACS('AWACS-1', 'Template-E-3A-1', true )
+	-- MarianasAWACSBlue:addAWACS('AWACS-1', 'Template-E-3A-1', true )
+	MarianasAWACSBlue:addAWACS('AWACS-2', 'TemplateMil-E-3A-1', false, 'Andersen AFB' )
 	MarianasAWACSBlue:addSpec('Guam',AWACSSpec)
 
+	MarianasAWACSBlue:startAWACS( 'AWACS-2','Guam',true )
+
 	if MissionStateAir == MissionStates.Hot then
-		MarianasAWACSBlue:assignEscort('AWACS-1', MarianasFightersBlue, {
+		MarianasAWACSBlue:assignEscort('AWACS-2', MarianasFightersBlue, {
 			callsign = { CALLSIGN.Aircraft.Colt,6 },
 			frequency = MissionParameters.FighterOpsFreq,
 		})
 	end
 		
-	MarianasAWACSBlue:menuInit(MenuTactical['Blue']['AWACS'])		
+	-- MarianasAWACSBlue:menuInit(MenuTactical['Blue']['AWACS'])		
 end -- AWACS
 
 if GCICAP then
