@@ -1,0 +1,377 @@
+// -----------------------------------------------------------------------------
+//  HOTAS Warthog Universal HID Mapping
+// -----------------------------------------------------------------------------
+//  Main script file
+//  Version:  1.0
+//  Author:   Sedenion
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Custom config
+// -----------------------------------------------------------------------------
+
+// Shift-Submode Config
+// -----------------------------------------------------------------------------
+define SHIFT_ENABLED      1        // Enable (1) or Disable (0) Shift Submode
+
+define SHIFT_DEV          Throttle // Shift-Submode activation Button Device
+define SHIFT_BTN          EACON    // Shift-Submode activation Button ID
+
+// Button & Hat Shift-Submode Activation
+// -----------------------------------------------------------------------------
+define H4_SHIFT           1        // Enable (1) or Disable (0) Shift-Submode for Hat 1
+define BS_SHIFT           0        // Enable (1) or Disable (0) Shift-Submode for Boat Switch
+
+// Button & Hat Long-Press Activation
+// -----------------------------------------------------------------------------
+define S1_LONG            0        // Enable (1) or Disable (0) Long-Press for S1 button
+define S2_LONG            0        // Enable (1) or Disable (0) Long-Press for S2 button
+define S3_LONG            0        // Enable (1) or Disable (0) Long-Press for S3 button
+define S4_LONG            0        // Enable (1) or Disable (0) Long-Press for S4 button
+define H2_LONG            0        // Enable (1) or Disable (0) Long-Press for Hat 2 L & R
+define LTB_LONG           0        // Enable (1) or Disable (0) Long-Press for LTB button
+
+define CS_LONG            0        // Enable (1) or Disable (0) Long-Press for CS Hat U & D
+define CH_LONG            0        // Enable (1) or Disable (0) Long-Press for China Hat
+define AP_LONG            0        // Enable (1) or Disable (0) Long-Press for AP button
+define LDGH_LONG          0        // Enable (1) or Disable (0) Long-Press for LDGH button
+
+// Common LED Config
+// -----------------------------------------------------------------------------
+define LED_BRIGHTNESS     128      // LED brightness level (0-255)
+define LED_BACKLIGHT      1        // Enable (1) or Disable (0) LED Backlight
+
+// Button-controlled LED Mapping
+// -----------------------------------------------------------------------------
+define LED1_CONTROL       0        // Enable (1) or Disable (0) Controlled LED1
+define LED1_DEV           Throttle // LED1 Controll Button Device
+define LED1_BTN           -1       // LED1 Controll Button ID
+
+define LED2_CONTROL       1        // Enable (1) or Disable (0) Controlled LED2
+define LED2_DEV           Throttle // LED2 Controll Button Device
+define LED2_BTN           APUON    // LED2 Controll Button ID
+
+define LED3_CONTROL       1        // Enable (1) or Disable (0) Controlled LED3
+define LED3_DEV           Throttle // LED3 Controll Button Device
+define LED3_BTN           RDRNRM   // LED3 Controll Button ID
+
+define LED4_CONTROL       1        // Enable (1) or Disable (0) Controlled LED4
+define LED4_DEV           Throttle // LED4 Controll Button Device
+define LED4_BTN           EACON    // LED4 Controll Button ID
+
+define LED5_CONTROL       1        // Enable (1) or Disable (0) Controlled LED5
+define LED5_DEV           Throttle // LED5 Controll Button Device
+define LED5_BTN           FLAPD    // LED5 Controll Button ID
+
+
+// -----------------------------------------------------------------------------
+// Includes
+// -----------------------------------------------------------------------------
+include "target.tmh"                       // Standard TM Header
+include "include/dx+.tmh"                  // DX++ Module
+include "include/pov.tmh"                  // Custom POV Hat module
+include "include/ldc.tmh"                  // LED Control module
+
+// -----------------------------------------------------------------------------
+// Event callback
+// -----------------------------------------------------------------------------
+int EventHandle(int type, alias o, int x)
+{
+  // Default mapping callback call
+  DefaultMapping(&o, x);
+  
+  // Custom Modules callback calls
+  PovMapping(&o, x);
+  LDcMapping(&o, x);
+}
+
+
+// Main entry
+// -----------------------------------------------------------------------------
+int main() 
+{
+  // ----------------------- Exclude unused devices ----------------------------
+  Configure( &HCougar,       MODE_EXCLUDED);
+  Configure( &T16000,        MODE_EXCLUDED);
+  Configure( &T16000L,       MODE_EXCLUDED);
+  Configure( &TWCSThrottle,  MODE_EXCLUDED);
+  Configure( &LMFD,          MODE_EXCLUDED);
+  Configure( &RMFD,          MODE_EXCLUDED);
+  Configure( &TFRPRudder,    MODE_EXCLUDED);
+	
+  // ------------------------- Event Callback Init -----------------------------
+  //          Even Callback     Btn count   Joystick only
+  DXpInit(    &EventHandle,     90,        CREATE_JOYSTICK);
+  
+  // --------------------------- Global setup ----------------------------------
+  //               Pulse       Delay
+  SetKBRate(       32,         15 );
+	
+  if(SHIFT_ENABLED) {
+    SetShiftButton( &SHIFT_DEV, SHIFT_BTN, 0, 0, 0, 0); 
+  }
+  
+  // --------------------------- Joystick Mapping ------------------------------
+  
+  // -- TG1 --
+  MapKey(       &Joystick,     TG1,              DX1  );
+  
+  // -- TG2 --
+  MapKey(       &Joystick,     TG2,              DX15 );
+  
+  // -- S1 --
+  if(S1_LONG) {
+    MapKey(     &Joystick,     S1,        TEMPO( DX5 , DX25 ));
+  } else {
+    MapKey(     &Joystick,     S1,               DX5  );
+  }
+  
+  // -- S2 --
+  if(S2_LONG) {
+    MapKey(     &Joystick,     S2,        TEMPO( DX2 , DX22 ));
+  } else {
+    MapKey(     &Joystick,     S2,               DX2  );
+  }
+  
+  // -- S3 --
+  if(S3_LONG) {
+    MapKey(     &Joystick,     S3,        TEMPO( DX3 , DX23 ));
+  } else {
+    MapKey(     &Joystick,     S3,               DX3  );
+  }
+  
+  // -- S4 --
+  if(S4_LONG) {
+    MapKey(     &Joystick,     S4,        TEMPO( DX4 , DX24 ));
+  } else {
+    MapKey(     &Joystick,     S4,               DX4  );
+  }
+  
+  // -- H1 (TRIM) --
+  MapKey(       &Joystick,     H1U,              DX16 );
+  MapKey(       &Joystick,     H1D,              DX17 );
+  MapKey(       &Joystick,     H1L,              DX18 );
+  MapKey(       &Joystick,     H1R,              DX19 );
+  
+  // -- H2 (TMS) --
+  MapKey(       &Joystick,     H2U,              DX6 );
+  MapKey(       &Joystick,     H2D,              DX7 );
+  if(H2_LONG) {
+    MapKey(     &Joystick,     H2L,       TEMPO( DX8, DX20 )); 
+    MapKey(     &Joystick,     H2R,       TEMPO( DX9, DX21 ));
+  } else {
+    MapKey(     &Joystick,     H2L,              DX8 ); 
+    MapKey(     &Joystick,     H2R,              DX9 );
+  }
+  
+  // -- H3 (DMS) --
+  SetPov(       &Joystick,     H3 ); // Use H3 as POV
+  
+  // -- H4 --
+  if(SHIFT_ENABLED & H4_SHIFT) {
+    MapKeyIO(   &Joystick,     H4P,      DX26,   DX10 );
+    MapKeyIO(   &Joystick,     H4U,      DX27,   DX11 );
+    MapKeyIO(   &Joystick,     H4D,      DX28,   DX12 );
+    MapKeyIO(   &Joystick,     H4L,      DX29,   DX13 );
+    MapKeyIO(   &Joystick,     H4R,      DX30,   DX14 );
+  } else {
+    MapKey(     &Joystick,     H4P,              DX10 );
+    MapKey(     &Joystick,     H4U,              DX11 );
+    MapKey(     &Joystick,     H4D,              DX12 );
+    MapKey(     &Joystick,     H4L,              DX13 );
+    MapKey(     &Joystick,     H4R,              DX14 );
+  }
+
+  
+  // --------------------------- Throttle Mapping ------------------------------
+  // -- SC (Slew Control) --
+  MapKey(       &Throttle,     SC,               DX31 );
+  
+  // -- PS (Pinky Switch) --
+  MapKey(       &Throttle,     PSB,              DX32 );
+  MapKey(       &Throttle,     PSM,              DX33 );
+  MapKey(       &Throttle,     PSF,              DX34 );
+  
+  // -- LTB --
+  if(LTB_LONG) {
+    MapKey(     &Throttle,     LTB,       TEMPO( DX35, DX36 ));
+  } else {
+    MapKey(     &Throttle,     LTB,              DX35 );
+  }
+  
+  // -- CS (Coolie Switch) --
+  if(CS_LONG) {
+    MapKey(     &Throttle,     CSU,       TEMPO( DX37, DX41 ));
+    MapKey(     &Throttle,     CSD,       TEMPO( DX39, DX42 ));
+  } else {
+    MapKey(     &Throttle,     CSU,              DX37 );
+    MapKey(     &Throttle,     CSD,              DX39 );
+  }
+  MapKey(       &Throttle,     CSR,              DX38 );
+  MapKey(       &Throttle,     CSL,              DX40 );
+  
+  // -- MS (MIC Switch) --
+  MapKey(       &Throttle,     MSU,              DX43 );
+  MapKey(       &Throttle,     MSR,              DX44 );
+  MapKey(       &Throttle,     MSD,              DX45 ); 
+  MapKey(       &Throttle,     MSL,              DX46 );
+  MapKey(       &Throttle,     MSP,              DX47 );
+  
+  // -- SPD (Speedbrake) --
+  MapKey(       &Throttle,     SPDB,             DX48 );
+  MapKey(       &Throttle,     SPDM,             DX49 );
+  MapKey(       &Throttle,     SPDF,             DX50 );
+  
+  // -- BS (Boat Switch) --
+  if(SHIFT_ENABLED & BS_SHIFT) {
+    MapKeyIO(   &Throttle,     BSB,      DX54,   DX51 );
+    MapKeyIO(   &Throttle,     BSM,      DX55,   DX52 );
+    MapKeyIO(   &Throttle,     BSF,      DX56,   DX53 );
+  } else {
+    MapKey(     &Throttle,     BSB,              DX51 );
+    MapKey(     &Throttle,     BSM,              DX52 );
+    MapKey(     &Throttle,     BSF,              DX53 );
+  }
+  
+  // -- CH (China Hat) --
+  if(CH_LONG) {
+    MapKey(     &Throttle,     CHB,       TEMPO( DX57, DX59, 800 ));
+    MapKey(     &Throttle,     CHF,       TEMPO( DX58, DX60, 800 ));
+  } else {
+    MapKey(     &Throttle,     CHB,              DX57 );
+    MapKey(     &Throttle,     CHF,              DX58 );
+  }
+  
+  // ---------------------------- Console Mapping ------------------------------
+
+  // -- FLAP --
+  MapKey(       &Throttle,     FLAPD,            DX61 );
+  MapKey(       &Throttle,     FLAPM,            DX62 );
+  MapKey(       &Throttle,     FLAPU,            DX63 );
+  
+  // -- EAC --
+  MapKey(       &Throttle,     EACOFF,           DX64 );
+  MapKey(       &Throttle,     EACON,            DX65 );
+  
+  // -- RDR --
+  MapKey(       &Throttle,     RDRDIS,           DX66 );  
+  MapKey(       &Throttle,     RDRNRM,           DX67 );
+  
+  // -- AP --
+  // -- APENG/DIS (Autopilot Button) --
+  if(AP_LONG) {
+    MapKey(     &Throttle,     APENG,     TEMPO( DX68, DX69 ));
+  } else {
+    MapKey(     &Throttle,     APENG,            DX68 );
+  }
+  // -- APALT/APAH/APALT (Autopilot Mode) --
+  MapKey(       &Throttle,     APALT,            DX70 );
+  MapKey(       &Throttle,     APAH,             DX71 );
+  MapKey(       &Throttle,     APPAT,            DX72 );
+  
+  // -- LDGH --
+  if(LDGH_LONG) {
+    MapKey(     &Throttle,     LDGH,      TEMPO( DX73, DX74 ));
+  } else {
+    MapKey(     &Throttle,     LDGH,             DX73 );
+  }
+  
+  // -- APU --
+  MapKey(       &Throttle,     APUOFF,           DX75 );
+  MapKey(       &Throttle,     APUON,            DX76 );
+  
+  // -- EOL (Engine Operate Left) --
+  MapKey(       &Throttle,     EOLMOTOR,         DX77 );
+  MapKey(       &Throttle,     EOLNORM,          DX78 );
+  MapKey(       &Throttle,     EOLIGN,           DX79 );
+  
+  // -- EOR (Engine Operate Right) --
+  MapKey(       &Throttle,     EORMOTOR,         DX80 );
+  MapKey(       &Throttle,     EORNORM,          DX81 );
+  MapKey(       &Throttle,     EORIGN,           DX82 );
+  
+  // -- EFL (Engine Fuel Flow Left) --
+  MapKey(       &Throttle,     EFLOVER,          DX83 );
+  MapKey(       &Throttle,     EFLNORM,          DX84 );
+  
+  // -- EFR (Engine Fuel Flow Right) --
+  MapKey(       &Throttle,     EFROVER,          DX85 );
+  MapKey(       &Throttle,     EFRNORM,          DX86 );
+  
+  // --- Engine Idle
+  MapKey(       &Throttle,     IDLELON,          DX87 );
+  MapKey(       &Throttle,     IDLELOFF,         DX88 );
+  MapKey(       &Throttle,     IDLERON,          DX89 );
+  MapKey(       &Throttle,     IDLEROFF,         DX90 );
+
+  
+  
+  // ------------------------------ Axis Mapping -------------------------------
+  // DX Axis Mapping   
+  //      Device       TM Axis     DX Axis         NORMAL/REVERSED  ABSOLUTE/RELATIVE
+  MapAxis(&Joystick,   JOYX,       DX_X_AXIS,      AXIS_NORMAL,     MAP_ABSOLUTE);
+  MapAxis(&Joystick,   JOYY,       DX_Y_AXIS,      AXIS_NORMAL,     MAP_ABSOLUTE);
+  MapAxis(&Throttle,   SCX,        DX_ZROT_AXIS,   AXIS_NORMAL,     MAP_ABSOLUTE); // DX_XROT_AXIS
+  MapAxis(&Throttle,   SCY,        DX_YROT_AXIS,   AXIS_NORMAL,     MAP_ABSOLUTE);
+  MapAxis(&Throttle,   THR_RIGHT,  DX_Z_AXIS,      AXIS_NORMAL,     MAP_ABSOLUTE);
+  MapAxis(&Throttle,   THR_LEFT,   DX_XROT_AXIS,   AXIS_NORMAL,     MAP_ABSOLUTE); // DX_ZROT_AXIS
+  MapAxis(&Throttle,   THR_FC,     DX_SLIDER_AXIS, AXIS_NORMAL,     MAP_ABSOLUTE);
+  // Axis Curves       
+  //        Device     TM Axis     Left-DZ     Center-DZ   Right-DZ  Curve   Scale/Zoom
+  SetSCurve(&Joystick, JOYX,       0,          0,          0,        0,      0);
+  SetSCurve(&Joystick, JOYY,       0,          0,          0,        0,      0);
+  SetSCurve(&Throttle, SCX,        0,          0,          0,        0,      0);
+  SetSCurve(&Throttle, SCY,        0,          0,          0,        0,      0);
+  SetSCurve(&Throttle, THR_RIGHT,  0,          0,          0,        0,      0);
+  SetSCurve(&Throttle, THR_LEFT,   0,          0,          0,        0,      0);
+  SetSCurve(&Throttle, THR_FC,     0,          0,          0,        0,      0);
+  
+  // ----------------------------- LED Mapping ---------------------------------
+  
+  //            Device     Intensity
+  LedIntensity( &Throttle, LED_BRIGHTNESS );
+  
+  //            Device     LED        Enable/Disable
+  LedEnable(    &Throttle, LED0,      LED_BACKLIGHT );      // Backlight
+    
+  if(LED1_BTN != -1) {
+    //            Device     BTN        Device          LED     CONTROL MODE
+    MapLed(       &LED1_DEV, LED1_BTN,  &Throttle,      LED2,   LED_ONPRESS );
+  } else {
+    //            Device     LED        Enable/Disable
+    LedEnable(    &Throttle, LED1,      0 );
+  }
+  
+  if(LED2_BTN != -1) {
+    //            Device     BTN        Device          LED     CONTROL MODE
+    MapLed(       &LED2_DEV, LED2_BTN,  &Throttle,      LED2,   LED_ONPRESS );
+  } else {
+    //            Device     LED        Enable/Disable
+    LedEnable(    &Throttle, LED2,      0 );
+  }
+  
+  if(LED3_BTN != -1) {
+    //            Device     BTN        Device          LED     CONTROL MODE
+    MapLed(       &LED3_DEV, LED3_BTN,  &Throttle,      LED3,   LED_ONPRESS );
+  } else {
+    //            Device     LED        Enable/Disable
+    LedEnable(    &Throttle, LED3,      0 );
+  }
+  
+  if(LED4_BTN != -1) {
+    //            Device     BTN        Device          LED     CONTROL MODE
+    MapLed(       &LED4_DEV, LED4_BTN,  &Throttle,      LED4,   LED_ONPRESS );
+  } else {
+    //            Device     LED        Enable/Disable
+    LedEnable(    &Throttle, LED4,      0 );
+  }
+  
+  if(LED5_BTN != -1) {
+    //            Device     BTN        Device          LED     CONTROL MODE
+    MapLed(       &LED5_DEV, LED5_BTN,  &Throttle,      LED5,   LED_ONPRESS );
+  } else {
+    //            Device     LED        Enable/Disable
+    LedEnable(    &Throttle, LED5,      0 );
+  }
+}
+

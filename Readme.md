@@ -20,10 +20,11 @@
 ## Todo list
 
 - DONE: AWACSHANDLER Air start
-- TANKERHANDLER Air start
+- DONE: TANKERHANDLER Air start
 - TANKERHANDLER Multiple Tankers (Drogue/Boom) at one Spec
 - AWACSHANDLER Optional Menus for RTB command
 - AWACSHANDLER treating RTB ( do shutdown, respawn ... )
 - AWACSHANDLER treating Fighter escort on AWACS RTB
 - FIGHTERHANDLER Optional Menus for RTB command
-
+- TANKERHANDLER treat active runway
+- AWACSHANDLER treat active runway

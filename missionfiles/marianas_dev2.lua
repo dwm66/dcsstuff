@@ -14,7 +14,7 @@ local FighterHandling = true
 local MissionParameters = {
 	CrystalPalace		= { Unit = "HQ", Frequency = 136.5 },
 	TankerOpsFreq		= 328.025,
-	FighterOpsFreq		= 376.125,
+	FighterOpsFreq		= 326.125,
 }
 
 local MissionStates = { Cold = 1, Hot = 2 }
@@ -250,149 +250,6 @@ if AARange then
 		TrainingCAPZone:__Start(1)
 	end
 	
-	INTERCEPTTRAINER = {
-		Coalition          = coalition.side.BLUE,
-		InitLimit          = 3,
-		AirBaseSpawn       = SPAWN.Takeoff.Cold,
-		
-		TargetSpecs        = {}
-	}
-		
-	function INTERCEPTTRAINER:New( theCoalition )
-		local self = BASE:Inherit(self, BASE:New())
-		self.Coalition = theCoalition or coalition.side.BLUE
-		
-		return self
-	end
-	
-	function INTERCEPTTRAINER:addTargetSpec( Name, Template, StartAt, AttackTarget, RoutePoints, EnrouteMinAltitude, EnrouteMaxAltitude )
-		local theSpec = {
-			Name = Name,
-			Template = Template,
-			StartAt = StartAt,
-			AttackTarget = AttackTarget,
-			RoutePoints = RoutePoints,
-			Protected = false,
-			EnrouteMinAltitude = EnrouteMinAltitude,
-			EnrouteMaxAltitude = EnrouteMaxAltitude,
-			IngressDistance = 20000,
-			EgressDistance = 10000,
-		}
-		
-		self.TargetSpecs[Name]=theSpec
-	end
-	
-	function INTERCEPTTRAINER:findSpec(Name)
-		local theSpec = nil
-
-		for n,t in pairs( self.TargetSpecs ) do
-			if t.Name == Name then 
-				theSpec = t
-				break
-			end
-		end
-
-		return theSpec		
-	end
-
-	function INTERCEPTTRAINER:InterceptTraining ( SpecName )
-		if self.TargetSpecs[SpecName] == nil then
-			self:E('INTERCEPTTRAINER Error: Spec ' .. SpecName .. ' does not exist!')
-		end
-		
-		local theSpec = self.TargetSpecs[SpecName]		
-		local StartAtClass = theSpec.StartAt:GetClassName()
-		
-		local AttackTargetCoord = theSpec.AttackTarget
-		
-		local TemplateGroup = GROUP:FindByName(theSpec.Template)
-		local EnrouteVelocity = TemplateGroup:GetSpeedMax()*0.8
-		
-		local TargetSpawn  = SPAWN:New(theSpec.Template) -- :InitLimit(1,3)
-		-- TargetSpawn:InitHeading(135)
-		local TrainingDroneGroup = {}
-		
-		local TrainingDroneStart = theSpec.StartAt:GetCoordinate()
-		
-		local NextPoint = AttackTargetCoord
-		if #theSpec.RoutePoints > 0 then
-			NextPoint = theSpec.RoutePoints[1]
-		end		
-		
-		local EnrouteAltitude = math.random( theSpec.EnrouteMinAltitude, theSpec.EnrouteMaxAltitude)
-		
-		if StartAtClass == 'AIRBASE' then
-			TrainingDroneGroup = TargetSpawn:SpawnAtAirbase( theSpec.StartAt, self.AirBaseSpawn )
-		elseif StartAtClass:sub(1, 4) == 'ZONE' then
-			self:I('INTERCEPTTRAINER starting at Zone')
-			local BasicHeading = TrainingDroneStart:GetAngleDegrees(TrainingDroneStart:GetDirectionVec3(NextPoint))
-			TargetSpawn:InitHeading(BasicHeading)
-			TrainingDroneGroup = TargetSpawn:SpawnInZone(theSpec.StartAt, true, theSpec.EnrouteMinAltitude, theSpec.EnrouteMaxAltitude )
-			
-			TrainingDroneStart = TrainingDroneGroup:GetCoordinate()
-			EnrouteAltitude = TrainingDroneStart.y
-			env.info('Altitude is ' .. EnrouteAltitude )
-		elseif StartAtClass == 'COORDINATE' then
-			self:I('INTERCEPTTRAINER starting with a COORDINATE')
-
-			local BasicHeading = TrainingDroneStart:GetAngleDegrees(TrainingDroneStart:GetDirectionVec3(NextPoint))
-			TargetSpawn:InitHeading(BasicHeading)
-			TrainingDroneGroup = TargetSpawn:SpawnFromCoordinate(theSpec.StartAt)
-			
-			TrainingDroneStart = theSpec.StartAt
-			EnrouteAltitude = TrainingDroneStart.y
-			self:I('Altitude is ' .. EnrouteAltitude )
-		end
-		
-		theSpec['DroneGroup']=TrainingDroneGroup
-		
-		local theWaypoints = {}
-		
-		if StartAtClass == 'AIRBASE' then
-			table.insert(theWaypoints,theSpec.StartAt:GetCoordinate():WaypointAirTakeOffParking())
-		else
-			-- table.insert(theWaypoints,theSpec.StartAt:GetCoordinate():SetAltitude(EnrouteAltitude):WaypointAirTurningPoint('BARO',EnrouteVelocity ))		
-		end
-
-		local lastPoint = TrainingDroneStart:GetIntermediateCoordinate(NextPoint,0.2)
-		table.insert(theWaypoints,lastPoint:SetAltitude(EnrouteAltitude):WaypointAirTurningPoint('BARO',EnrouteVelocity ))
-		
-		for k,cords in pairs(theSpec.RoutePoints) do
-			table.insert(theWaypoints,cords:WaypointAirTurningPoint("BARO",EnrouteVelocity))
-			lastPoint = cords
-		end
-		
-		local IngressDistance = lastPoint:Get2DDistance(AttackTargetCoord)
-		env.info("Ingress Distance: " .. IngressDistance )
-		local EgressPoint = AttackTargetCoord:GetIntermediateCoordinate(lastPoint,10000/IngressDistance*(-1))
-		
-		BombingTask = TrainingDroneGroup:TaskBombing(AttackTargetCoord:GetVec2())
-		table.insert(theWaypoints,AttackTargetCoord:SetAltitude(EnrouteAltitude):WaypointAirTurningPoint("BARO",EnrouteVelocity,{BombingTask}))
-		table.insert(theWaypoints,EgressPoint:SetAltitude(EnrouteAltitude):WaypointAirTurningPoint('BARO',EnrouteVelocity ))
-		
-		-- egress ...
-		table.insert(theWaypoints,theSpec.StartAt:GetCoordinate():WaypointAirTurningPoint("BARO",EnrouteVelocity))
-		
-		TrainingDroneGroup:Route(theWaypoints)
-		
-		theSpec['AttackZone'] = ZONE_RADIUS:New('Simulated Attack Zone',AttackTargetCoord:GetVec2(),5000)
-		theSpec.AttackZone:DrawZone(coalition.side.BLUE,{1,0,0})
-		
-		self['Messager'] = SCHEDULER:New( TrainingDroneGroup,
-			function(g,z)
-				-- g:E('******************* Scheduler function for Zone ' .. z:GetCoordinate():ToStringLLDDM() .. ' Distance: ' .. z:GetCoordinate():Get2DDistance(g:GetCoordinate()) .. ' ******************')
-				if g:IsPartlyOrCompletelyInZone(z) then
-					g:MessageToAll( 'Attack group made it to target, defenders loose!' , 60 )
-					g:GetCoordinate():IlluminationBomb(5000000)
-				else
-					-- g:E('************* is outside: ' .. g:GetCoordinate():ToStringLLDDM() ..' *****************')
-				end
-				-- env.info(g:GetClassName())
-				-- env.info('***********************************************************************' .. z:GetClassName())
-			end, 
-			{ theSpec.AttackZone },1,2)
-	end
-
 	MenuTactical['Blue']['Training'] = MENU_COALITION:New( coalition.side.BLUE,"Air-Air Training")
 
 	MenuTactical['Blue']['Training']['Target Drone QF-4E']=MENU_COALITION_COMMAND:New( coalition.side.BLUE ,'Target Drone QF-4E',
@@ -404,15 +261,35 @@ if AARange then
 	)		
 
 	InterceptTrainer = INTERCEPTTRAINER:New(coalition.side.BLUE)
+
 	InterceptTrainer:addTargetSpec('Tu95 from northwest','TargetdroneTemplate -Tu95-1',ZONE_RADIUS:New('Tu95Area',getNavpoint('MIRAGE',coalition.side.BLUE,0):GetVec2(),100),
 	                               UNIT:FindByName('Medinilla Bomb Target B-1'):GetCoord(),
 								   {}, UTILS.FeetToMeters(15000),UTILS.FeetToMeters(20000))
+
+    --[[
 	InterceptTrainer:addTargetSpec('B17 from northwest','TargetdroneTemplate -B17-1',ZONE_RADIUS:New('B17Area',COORDINATE:NewFromLLDD(18.5,143,0):GetVec2(),40000),
 	                               AIRBASE:FindByName('Andersen AFB'):GetCoord(),
-								   {}, UTILS.FeetToMeters(5000),UTILS.FeetToMeters(15000))								   
-	env.info(table_out(InterceptTrainer.TargetSpecs))
+								   {}, UTILS.FeetToMeters(5000),UTILS.FeetToMeters(15000))					   
+    --]]
+    
+	InterceptTrainer:addTargetSpec('H6J from northwest','TargetdroneTemplate -H6J-1',ZONE_RADIUS:New('H6Area',COORDINATE:NewFromLLDD(18.5,143,0):GetVec2(),40000),
+	                               AIRBASE:FindByName('Andersen AFB'):GetCoord(),
+								   {}, UTILS.FeetToMeters(15000),UTILS.FeetToMeters(25000))
+								   
+								   
+	local NorthwestSectorZone = ZONE_RADIUS:New('Northwest Sector Area', AIRBASE:FindByName('Andersen AFB'):GetCoord():GetRandomVec2InSector(200000,250000,260,360),40000 )								   
+	NorthwestSectorZone:DrawZone(coalition.side.BLUE,{0,0,1})
 
-	InterceptTrainer:InterceptTraining('B17 from northwest')
+	InterceptTrainer:addTargetSpec('H6J from northwest sector',
+		'TargetdroneTemplate -H6J-1',
+		NorthwestSectorZone,
+		AIRBASE:FindByName('Andersen AFB'):GetCoord(),
+		{}, UTILS.FeetToMeters(15000),UTILS.FeetToMeters(25000))							   
+								   
+
+    env.info(table_out(InterceptTrainer.TargetSpecs))
+
+	-- InterceptTrainer:InterceptTraining('H6J from northwest sector')
 	
 	-- Add single protected group(s).
 	-- fox:AddProtectedGroup(GROUP:FindByName("Target-Drone 1-2"))
@@ -515,50 +392,6 @@ if CarrierOps then
 	end	
 end
 
-if EWRDetection then
-	SetEWRGroup = SET_GROUP:New():FilterPrefixes( "EWR" ):FilterStart()
-
-	HQ = GROUP:FindByName( "HQ" )
-	CC = COMMANDCENTER:New( HQ, "HQ" )
-
-	AlertRaised = false
-
-	RecceDetection = DETECTION_UNITS:New( SetEWRGroup ):FilterCategories( Unit.Category.AIRPLANE )
-
-	RecceDetection:Start()
-
-	--- OnAfter Transition Handler for Event Detect.
-	-- @param Functional.Detection#DETECTION_UNITS self
-	-- @param #string From The From State string.
-	-- @param #string Event The Event string.
-	-- @param #string To The To State string.
-	-- function RecceDetection:OnAfterDetect(From,Event,To)
-
-	  -- local DetectionReport = self:DetectedReportDetailed()
-
-	  -- HQ:MessageToAll( DetectionReport, 15, "Detection" )
-	-- end
-
-	function RecceDetection:OnAfterDetected( From, Event, To, DetectedUnits )
-		self:E( { From, Event, To, DetectedUnits } )
-
-		for DetectedUnitID, DetectedUnit in pairs( DetectedUnits ) do
-			local DetectedUnit = DetectedUnit -- Wrapper.Unit#UNIT
-
-			local ThreatLevel = DetectedUnit:GetThreatLevel()
-
-			HQ:MessageToAll("Threat detected, raising Alert "..ThreatLevel, 30, "Detection")
-
-			if ThreatLevel > 0 and not AlertRaised then
-				HQ:MessageToAll("Threat detected, raising Alert", 30, "Detection")
-				AlertRaised = true
-			end -- if
-		
-		end -- for ...
-	end -- function
-	-- garbagecollect()
-end -- EWRDetection
-
 if FighterHandling then
 	GuamCAPSpec = {
 		name = 'Guam CAP',
@@ -586,11 +419,10 @@ if FighterHandling then
 end -- Fighter Handling
 
 if TankerHandling then
-	env.info(table_out(TankerHandler))
 
 	TankerRIOSpec = {
 		name = 'RIO',
-		callsign = { CALLSIGN.Tanker.Shell,2 },
+		callsign = { CALLSIGN.Tanker.Shell,4 },
 		frequency = 234.75,
 		tacan = 101, --as in 101Y
 		tacan_call = 'RIO',
@@ -614,13 +446,13 @@ if TankerHandling then
 			base_ingress = {
 							{ rwy = '06', coord = getNavpoint ('HILRI',	coalition.side.BLUE, UTILS.FeetToMeters(6000)) },
 						  },
-			velocity = UTILS.KnotsToKmph(350),
+			-- velocity = UTILS.KnotsToKmph(350),
 		},		
 	}
 
 	TankerMirageSpec = {
 		name = 'MIRAGE',
-		callsign = { CALLSIGN.Tanker.Arco,1},
+		callsign = { CALLSIGN.Tanker.Arco,4},
 		frequency = 271.525,
 		tacan = 103, --as in 101Y
 		tacan_call = 'MIR',
@@ -644,13 +476,13 @@ if TankerHandling then
 			base_ingress = {
 							{ rwy = '06', coord = getNavpoint ('HILRI',	coalition.side.BLUE, UTILS.FeetToMeters(6000)) },
 						  },
-			velocity = UTILS.KnotsToKmph(350),
+			-- velocity = UTILS.KnotsToKmph(350),
 		},		
 	}
 
 	TankerLuxorSpec = {
 		name = 'LUXOR',
-		callsign = { CALLSIGN.Tanker.Arco,1},
+		callsign = { CALLSIGN.Tanker.Texaco,1},
 		frequency = MissionParameters.TankerOpsFreq,
 		tacan = 102, --as in 102Y
 		tacan_call = 'LXR',
@@ -679,31 +511,29 @@ if TankerHandling then
 	}
 
 	
-	MarianasTankersBlue = TankerHandler:New()
+	MarianasTankersBlue = TANKERHANDLER:New('MarianasTankersBlue')
 
-	MarianasTankersBlue:addTanker("Django-1", TankerTypes.Boom, 'Template-KC-135-1',true)
-	MarianasTankersBlue:addTanker("Django-2", TankerTypes.Drogue, 'Template-KC-135MPRS-1',true)
-	MarianasTankersBlue:addTanker("Django-3", TankerTypes.Boom, 'Template-KC-135-2',true)
-	MarianasTankersBlue:addTanker("Django-4", TankerTypes.Drogue, 'Template-KC-135MPRS-2',true)
-	MarianasTankersBlue:addTanker("Django-5", TankerTypes.Drogue, 'Template-KC-135MPRS-3',true)
+	MarianasTankersBlue:addTanker("Django-1", TANKERTYPES.Boom, 'Template-KC-135-1',true)
+	MarianasTankersBlue:addTanker("Django-2", TANKERTYPES.Drogue, 'Template-KC-135MPRS-1',true)
+	MarianasTankersBlue:addTanker("Django-3", TANKERTYPES.Boom, 'Template-KC-135-2',true)
+	MarianasTankersBlue:addTanker("Django-4", TANKERTYPES.Drogue, 'Template-KC-135MPRS-2',true)
+	MarianasTankersBlue:addTanker("Django-5", TANKERTYPES.Drogue, 'Template-KC-135MPRS-3',true)
+	MarianasTankersBlue:addTanker("Django-6", TANKERTYPES.Drogue, 'TemplateMil-KC135MPRS-1',false, 'Andersen AFB')
+	MarianasTankersBlue:addTanker("Django-7", TANKERTYPES.Boom, 'TemplateMil-KC10-1',false, 'Andersen AFB')
 	
 	MarianasTankersBlue:addSpec("RIO",TankerRIOSpec)
 	MarianasTankersBlue:addSpec('MIRAGE',TankerMirageSpec)
-	MarianasTankersBlue:addSpec('LUXOR',TankerMirageSpec)
+	MarianasTankersBlue:addSpec('LUXOR',TankerLuxorSpec)
 	
 	env.info( "Tanker states: " .. table_out( MarianasTankersBlue:getTankerStates() ))
-
-	db = DATABASE:New()
-	PlayerUnits=db:GetPlayerUnits()
 	
 	local needBoom = false;
 	local needDrogue = false;
 	
-	for PlayerName, PlayerUnit in pairs( PlayerUnits ) do
-		self:E('Player ' .. PlayerName .. ' in ' .. PlayerUnit.GetCallsign() .. ' is a ' .. PlayerUnit:GetTypeName())
-	end
+    MarianasTankersBlue:_Start()
 	
-	-- MarianasTankersBlue:startTanker('Django-2','MIRAGE')
+	MarianasTankersBlue:startTanker('Django-6','MIRAGE',true)
+	-- MarianasTankersBlue:startTanker('Django-7','MIRAGE',true)
 	
 	if MissionStateAir == MissionStates.Hot then
 		MarianasTankersBlue:assignEscort('Django-2', MarianasFightersBlue, {
@@ -747,11 +577,11 @@ if AWACSHandling then
 
 	MarianasAWACSBlue = AWACSHANDLER:New()
 
-	-- MarianasAWACSBlue:addAWACS('AWACS-1', 'Template-E-3A-1', true )
-	MarianasAWACSBlue:addAWACS('AWACS-2', 'TemplateMil-E-3A-1', false, 'Andersen AFB' )
+	MarianasAWACSBlue:addAWACS('AWACS-1', 'Template-E-3A-1', true )
+	-- MarianasAWACSBlue:addAWACS('AWACS-2', 'TemplateMil-E-3A-1', false, 'Andersen AFB' )
 	MarianasAWACSBlue:addSpec('Guam',AWACSSpec)
 
-	MarianasAWACSBlue:startAWACS( 'AWACS-2','Guam',true )
+	-- MarianasAWACSBlue:startAWACS( 'AWACS-2','Guam',false ) -- start from Airbase
 
 	if MissionStateAir == MissionStates.Hot then
 		MarianasAWACSBlue:assignEscort('AWACS-2', MarianasFightersBlue, {
@@ -763,6 +593,123 @@ if AWACSHandling then
 	-- MarianasAWACSBlue:menuInit(MenuTactical['Blue']['AWACS'])		
 end -- AWACS
 
+if EWRDetection then
+	SetEWRGroup = SET_GROUP:New():FilterPrefixes( "EWR" ):FilterStart()
+
+	HQ = GROUP:FindByName( "HQ" )
+	CC = COMMANDCENTER:New( HQ, "HQ" )
+
+	--- OnAfter Transition Handler for Event Detect.
+	-- @param Functional.Detection#DETECTION_UNITS self
+	-- @param #string From The From State string.
+	-- @param #string Event The Event string.
+	-- @param #string To The To State string.
+	-- function RecceDetection:OnAfterDetect(From,Event,To)
+
+	  -- local DetectionReport = self:DetectedReportDetailed()
+
+	  -- HQ:MessageToAll( DetectionReport, 15, "Detection" )
+	-- end
+    
+
+
+    RecceDetection = DETECTION_UNITS:New( SetEWRGroup ):FilterCategories( Unit.Category.AIRPLANE )
+    
+    EWRHANDLER =    {
+                        ClassName = 'EWRHANDLER',
+                        Detection = 0,
+                        Headquarter = 0,
+                        Coalition = coalition.side.BLUE,
+                        TrackedUnits =  {},
+                        FighterHandler = nil,
+                        AlarmState = 0,
+						ProtectedZones = nil,
+                    }
+    
+    function EWRHANDLER:New( Detection, Headquarter, Coalition )
+ 		local self = BASE:Inherit(self, DETECTION_MANAGER:New(nil, Detection))
+        self.Detection = Detection
+        self.Headquarter = Headquarter
+		self.Coalition = Coalition or coalition.side.BLUE  
+		
+		self.ProtectedZones = SET_ZONE:New()
+        if self.Headquarter then
+			local HQZone = ZONE_RADIUS:New('HQZone',self.Headquarter:GetCoordinate():GetVec2(),5000)
+			HQZone:DrawZone(self.Coalition,{0,1,0})
+			self.ProtectedZones:AddZone(HQZone)
+		end
+
+
+		return self       
+    end    
+    
+    function EWRHANDLER:GenerateWarning( DetectedItem, Level )
+    
+        if DetectedItem.Set:Count() == 0 then
+            self:E('Detected set contains no units')
+            return nil
+        end
+
+        local DetectedUnit = DetectedItem.Set:GetFirst()
+    
+        local DetectedCoord = DetectedUnit:GetCoordinate()
+        local DetectedCourse = UTILS.Round(DetectedUnit:GetHeading(),0)
+        local DetectedVelocity = UTILS.Round(DetectedUnit:GetVelocityKNOTS(),0)
+        local DetectedAltitude = UTILS.Round(DetectedUnit:GetHeight(),0)
+        local DetectedFlightLevel = UTILS.Round(UTILS.MetersToFeet(DetectedUnit:GetHeight())/100.0,-1)
+        
+        -- self:I(DetectedSet:GetFirst():GetHeading())
+        
+        local result = 'Attention, unknown airplane '
+        result = result .. ' on flightlevel ' .. DetectedFlightLevel .. ' course ' .. DetectedCourse
+        result = result .. ' contact control at once and squawk 3356 at once, or you will be intercepted'
+    
+        self:I(result)
+        self.Headquarter:MessageToAll( result, 25, "Crystal Palace" )
+    end
+           
+    function EWRHANDLER:ProcessDetected(Detection)
+        for DetectedItemID, DetectedItem in pairs( Detection:GetDetectedItems()) do
+
+            local DetectedItem = DetectedItem -- Functional.Detection#DETECTION_BASE.DetectedItem
+            local DetectedSet = DetectedItem.Set -- Core.Set#SET_UNIT
+            local DetectedCount = DetectedSet:Count()
+            local DetectedZone = DetectedItem.Zone
+
+            self:F( { "Target ID", DetectedItem.ItemID } )
+            -- self:I( table_out_1(DetectedItem.Set))
+            DetectedSet:Flush( self )
+
+            local DetectedID = DetectedItem.ID
+            local DetectionIndex = DetectedItem.Index
+            local DetectedItemChanged = DetectedItem.Changed
+
+            if self.TrackedUnits[DetectionIndex] == nil then
+                self:I(timer.getTime() .. ': detected ' .. DetectedItemID )
+                self.TrackedUnits[DetectionIndex] = { firstSeen = timer.getTime(), lastSeen = timer.getTime(), ThreatStatus = 0, WarningCount = 0 }
+                self:OnFirstDetected( DetectedItem )
+            else
+                self.TrackedUnits[DetectionIndex].lastSeen=timer.getTime()
+            end
+        end
+          
+    end
+    
+    function EWRHANDLER:OnFirstDetected( DetectedItem )
+        self:I('First Detection: ' .. table_out_1(DetectedItem))
+        self:GenerateWarning( DetectedItem )
+    end
+    
+    EWRHandler = EWRHANDLER:New( RecceDetection, HQ )
+    EWRHandler:Start()
+
+end -- EWRDetection
+
+
 if GCICAP then
 
 end -- GCICAP
+
+-- local testCoord =  getNavpoint ('HILRI',	coalition.side.BLUE, UTILS.FeetToMeters(6000))
+-- testCoord:GetRandomVec2InSector(10000,20000,340,30)
+
